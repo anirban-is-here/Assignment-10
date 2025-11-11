@@ -30,22 +30,21 @@ app.get("/", (req, res) => {
    try {
      // Connect the client to the server	(optional starting in v4.7)
      await client.connect();
-     const db = client.db('next_db');
+     const db = client.db("next_db");
 
      //   course collection
-     const coursesCollection = db.collection('courses');
+     const coursesCollection = db.collection("courses");
 
      //   users collection
 
-     const usersCollection = db.collection('users');
+     const usersCollection = db.collection("users");
 
      //   enrollment collection
-     const enrollmentsCollection = db.collection('enrollments');
+     const enrollmentsCollection = db.collection("enrollments");
      //   ------------------------------------------------users apis----------------
      //   get all users api
 
-       app.get("/users", async (req, res) => {
-         
+     app.get("/users", async (req, res) => {
        const result = await usersCollection.find().toArray();
        res.json(result);
      });
@@ -70,14 +69,22 @@ app.get("/", (req, res) => {
      //   ---------------------------------courses apis----------------------------
 
      //   get all courses api
+     // get all courses
      app.get("/courses", async (req, res) => {
-       const email = req.query.email;
+       const instructorId = req.query.instructorId; // get UID from query
        const query = {};
-       if (email) {
-         query.email = email;
+
+       if (instructorId) {
+         query.instructorId = instructorId; // filter by instructor UID
        }
-       const result = await coursesCollection.find(query).toArray();
-       res.json(result);
+
+       try {
+         const result = await coursesCollection.find(query).toArray();
+         res.json(result);
+       } catch (error) {
+         console.error(error);
+         res.status(500).json({ message: "Failed to fetch courses" });
+       }
      });
 
      //   get course by id api
@@ -235,13 +242,12 @@ app.get("/", (req, res) => {
          res.status(500).json({ message: "failed to fetch enrolled users" });
        }
      });
-       
-       app.listen(port, () => {
-         console.log(`Smart server is running on port: ${port}`);
-       });
-       
-       
-    //  await client.db("admin").command({ ping: 1 });
+
+     app.listen(port, () => {
+       console.log(`Smart server is running on port: ${port}`);
+     });
+
+     //  await client.db("admin").command({ ping: 1 });
      console.log("✅ MongoDB connection successful");
      // Send a ping to confirm a successful connection
    } finally {
