@@ -68,7 +68,20 @@ app.get("/", (req, res) => {
 
      //   ---------------------------------courses apis----------------------------
 
-     //   get all courses api
+     //   get 6 featured courses api
+     app.get("/courses/featured", async (req, res) => {
+       try {
+         const result = await coursesCollection
+           .find({ isFeatured: true })
+           .limit(6) // ✅ LIMIT to 6 courses
+           .toArray();
+
+         res.json(result);
+       } catch (error) {
+         console.error(error);
+         res.status(500).json({ message: "Failed to fetch featured courses" });
+       }
+     });
      // get all courses
      app.get("/courses", async (req, res) => {
        const instructorId = req.query.instructorId; // get UID from query
