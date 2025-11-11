@@ -52,9 +52,17 @@ app.get("/", (req, res) => {
 
      //   add user api
      app.post("/users", async (req, res) => {
+       console.log(req.body);
        const newUser = req.body;
+       const query = { _id: newUser._id };
+       let user = await usersCollection.findOne(query);
+       if (!user) {
+         const result = await usersCollection.insertOne(newUser);
+         console.log("not in db, inserting......");
+       } else {
+         console.log("already in db");
+       }
 
-       const result = await usersCollection.insertOne(newUser);
        console.log("Hello there", result);
        res.json(result);
      });
@@ -62,12 +70,12 @@ app.get("/", (req, res) => {
      //   ---------------------------------courses apis----------------------------
 
      //   get all courses api
-       app.get("/courses", async (req, res) => {
-         const email = req.query.email;
-         const query = {};
-         if (email) {
-           query.email = email;
-         }
+     app.get("/courses", async (req, res) => {
+       const email = req.query.email;
+       const query = {};
+       if (email) {
+         query.email = email;
+       }
        const result = await coursesCollection.find(query).toArray();
        res.json(result);
      });
@@ -82,7 +90,29 @@ app.get("/", (req, res) => {
 
      //   add a course
      app.post("/courses", async (req, res) => {
-       const newCourse = req.body;
+       const {
+         title,
+         imageUrl,
+         price,
+         duration,
+         category,
+         description,
+         instructorId,
+         isFeatured,
+       } = req.body;
+
+       const newCourse = {
+         title,
+         imageUrl,
+         price: Number(price),
+         duration,
+         category,
+         description,
+         instructorId,
+         isFeatured: Boolean(isFeatured),
+         createdAt: new Date(),
+         enrolledStudents: [],
+       };
        const result = await coursesCollection.insertOne(newCourse);
        res.json(result);
      });
@@ -90,7 +120,26 @@ app.get("/", (req, res) => {
      //   update a course
 
      app.put("/courses/:id", async (req, res) => {
-       const updatedCourse = req.body;
+       const {
+         title,
+         imageUrl,
+         price,
+         duration,
+         category,
+         description,
+         isFeatured,
+       } = req.body;
+
+       const updatedCourse = {
+         ...(title && { title }),
+         ...(imageUrl && { imageUrl }),
+         ...(price !== undefined && { price: Number(price) }),
+         ...(duration && { duration }),
+         ...(category && { category }),
+         ...(description && { description }),
+         ...(isFeatured !== undefined && { isFeatured: Boolean(isFeatured) }),
+         updatedAt: new Date(),
+       };
        const result = await coursesCollection.updateOne(
          {
            _id: new ObjectId(req.params.id),
@@ -112,17 +161,79 @@ app.get("/", (req, res) => {
      //   -------------------------------enrollment apis---------
 
      //   user enrolls in a course(post enroll)
-     app.post("/enroll", async (req, res) => {
-       const newEnrollment = req.body;
-       const result = await enrollmentsCollection.insertOne(newEnrollment);
-       res.json(result);
+     app.post("/courses/:id/enroll", async (req, res) => {
+       const courseId = req.params.id;
+       const { userId } = req.body;
+       // add course to user
+       try {
+         await usersCollection.updateOne(
+           { _id: userId },
+           { $addToSet: { enrolledCourses: courseId } }
+         );
+         //  add user to course
+         await coursesCollection.updateOne(
+           { _id: new ObjectId(courseId) },
+           { $addToSet: { enrolledStudents: userId } }
+         );
+         res.json({ message: "enrollment successful" });
+       } catch (error) {
+         console.log(error);
+         res.status(500).json({ message: "Enrollment failed" });
+       }
      });
 
      //   get enrolled courses for a user
-     app.get("/enrollments/:userId", async (req, res) => {
-       const querry = { userId: req.params.userId };
-       const result = await enrollmentsCollection.find(querry).toArray();
-       res.json(result);
+     app.get("/users/:id/enrolled", async (req, res) => {
+       const userId = req.params.id;
+
+       try {
+         const user = await usersCollection.findOne({ _id: userId });
+         if (!user) return res.status(404).json({ message: "user not found" });
+         const enrolledCourseIds = user.enrolledCourses || [];
+         if (enrolledCourseIds.length === 0) {
+           return res.json([]);
+         }
+
+         //  fetch all courses enrolled by an user
+         const courses = await coursesCollection
+           .find({
+             _id: { $in: enrolledCourseIds.map((id) => new ObjectId(id)) },
+           })
+           .toArray();
+         res.json(courses);
+       } catch (error) {
+         console.log(error);
+         res.status(500).json({ message: "failed to fetch enrolled courses" });
+       }
+     });
+
+     //  get all students enrolled in a course
+     app.get("/courses/:id/students", async (req, res) => {
+       const courseId = req.params.id;
+
+       try {
+         const course = await coursesCollection.findOne({
+           _id: new ObjectId(courseId),
+         });
+         if (!course)
+           return res.status(404).json({ message: "course not found" });
+         const enrolledUserIds = course.enrolledStudents || [];
+         if (enrolledUserIds.length === 0) {
+           return res.json([]);
+         }
+
+         //  fetch all students enrolled in a course
+
+         const users = await usersCollection
+           .find({
+             _id: { $in: enrolledUserIds },
+           })
+           .toArray();
+         res.json(users);
+       } catch (error) {
+         console.log(error);
+         res.status(500).json({ message: "failed to fetch enrolled users" });
+       }
      });
        
        app.listen(port, () => {
