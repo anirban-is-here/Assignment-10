@@ -17,7 +17,7 @@ const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster
 const client = new MongoClient(uri, {
   serverApi: {
     version: ServerApiVersion.v1,
-    strict: true,
+    strict: false,
     deprecationErrors: true,
   },
 });
@@ -26,246 +26,270 @@ app.get("/", (req, res) => {
   res.send("smart Server is runnning~~!!");
 });
 
- async function run() {
-   try {
-     // Connect the client to the server	(optional starting in v4.7)
-     await client.connect();
-     const db = client.db("next_db");
+async function run() {
+  try {
+    // Connect the client to the server	(optional starting in v4.7)
+    await client.connect();
+    const db = client.db("next_db");
 
-     //   course collection
-     const coursesCollection = db.collection("courses");
+    //   course collection
+    const coursesCollection = db.collection("courses");
 
-     //   users collection
+    //   users collection
 
-     const usersCollection = db.collection("users");
+    const usersCollection = db.collection("users");
 
-     //   enrollment collection
-     const enrollmentsCollection = db.collection("enrollments");
-     //   ------------------------------------------------users apis----------------
-     //   get all users api
+    //   enrollment collection
+    const enrollmentsCollection = db.collection("enrollments");
+    //   ------------------------------------------------users apis----------------
+    //   get all users api
 
-     app.get("/users", async (req, res) => {
-       const result = await usersCollection.find().toArray();
-       res.json(result);
-     });
+    app.get("/users", async (req, res) => {
+      const result = await usersCollection.find().toArray();
+      res.json(result);
+    });
 
-     //   add user api
-     app.post("/users", async (req, res) => {
-       console.log(req.body);
-       const newUser = req.body;
-       const query = { _id: newUser._id };
-       let user = await usersCollection.findOne(query);
-       if (!user) {
-         const result = await usersCollection.insertOne(newUser);
-         console.log("not in db, inserting......");
-       } else {
-         console.log("already in db");
-       }
+    //   add user api
+    app.post("/users", async (req, res) => {
+      console.log(req.body);
+      const newUser = req.body;
+      const query = { _id: newUser._id };
+      let user = await usersCollection.findOne(query);
+      if (!user) {
+        const result = await usersCollection.insertOne(newUser);
+        console.log("not in db, inserting......");
+      } else {
+        console.log("already in db");
+      }
 
-       console.log("Hello there", result);
-       res.json(result);
-     });
+      console.log("Hello there", result);
+      res.json(result);
+    });
 
-     //   ---------------------------------courses apis----------------------------
+    //   ---------------------------------courses apis----------------------------
 
-     //   get 6 featured courses api
-     app.get("/courses/featured", async (req, res) => {
-       try {
-         const result = await coursesCollection
-           .find({ isFeatured: true })
-           .limit(6) // ✅ LIMIT to 6 courses
-           .toArray();
+    //  get all categories
+    app.get("/categories", async (req, res) => {
+      try {
+        const categories = await coursesCollection.distinct("category");
+        res.json(categories);
+      } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Failed to fetch categories" });
+      }
+    });
 
-         res.json(result);
-       } catch (error) {
-         console.error(error);
-         res.status(500).json({ message: "Failed to fetch featured courses" });
-       }
-     });
-     // get all courses
-     app.get("/courses", async (req, res) => {
-       const instructorId = req.query.instructorId; // get UID from query
-       const query = {};
+    // Get courses by category
+    app.get("/courses/category/:category", async (req, res) => {
+      try {
+        const category = req.params.category;
+        const query = { category: category };
+        const result = await coursesCollection.find(query).toArray();
+        res.json(result);
+      } catch (error) {
+        console.error("Error fetching courses by category:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+      }
+    });
 
-       if (instructorId) {
-         query.instructorId = instructorId; // filter by instructor UID
-       }
+    //   get 6 featured courses api
+    app.get("/courses/featured", async (req, res) => {
+      try {
+        const result = await coursesCollection
+          .find({ isFeatured: true })
+          .limit(6) // ✅ LIMIT to 6 courses
+          .toArray();
 
-       try {
-         const result = await coursesCollection.find(query).toArray();
-         res.json(result);
-       } catch (error) {
-         console.error(error);
-         res.status(500).json({ message: "Failed to fetch courses" });
-       }
-     });
+        res.json(result);
+      } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Failed to fetch featured courses" });
+      }
+    });
+    // get all courses
+    app.get("/courses", async (req, res) => {
+      const instructorId = req.query.instructorId; // get UID from query
+      const query = {};
 
-     //   get course by id api
-     app.get("/courses/:id", async (req, res) => {
-       const id = req.params.id;
-       const query = { _id: new ObjectId(id) };
-       const result = await coursesCollection.findOne(query);
-       res.json(result);
-     });
+      if (instructorId) {
+        query.instructorId = instructorId; // filter by instructor UID
+      }
 
-     //   add a course
-     app.post("/courses", async (req, res) => {
-       const {
-         title,
-         imageUrl,
-         price,
-         duration,
-         category,
-         description,
-         instructorId,
-         isFeatured,
-       } = req.body;
+      try {
+        const result = await coursesCollection.find(query).toArray();
+        res.json(result);
+      } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Failed to fetch courses" });
+      }
+    });
 
-       const newCourse = {
-         title,
-         imageUrl,
-         price: Number(price),
-         duration,
-         category,
-         description,
-         instructorId,
-         isFeatured: Boolean(isFeatured),
-         createdAt: new Date(),
-         enrolledStudents: [],
-       };
-       const result = await coursesCollection.insertOne(newCourse);
-       res.json(result);
-     });
+    //   get course by id api
+    app.get("/courses/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await coursesCollection.findOne(query);
+      res.json(result);
+    });
 
-     //   update a course
+    //   add a course
+    app.post("/courses", async (req, res) => {
+      const {
+        title,
+        imageUrl,
+        price,
+        duration,
+        category,
+        description,
+        instructorId,
+        isFeatured,
+      } = req.body;
 
-     app.put("/courses/:id", async (req, res) => {
-       const {
-         title,
-         imageUrl,
-         price,
-         duration,
-         category,
-         description,
-         isFeatured,
-       } = req.body;
+      const newCourse = {
+        title,
+        imageUrl,
+        price: Number(price),
+        duration,
+        category,
+        description,
+        instructorId,
+        isFeatured: Boolean(isFeatured),
+        createdAt: new Date(),
+        enrolledStudents: [],
+      };
+      const result = await coursesCollection.insertOne(newCourse);
+      res.json(result);
+    });
 
-       const updatedCourse = {
-         ...(title && { title }),
-         ...(imageUrl && { imageUrl }),
-         ...(price !== undefined && { price: Number(price) }),
-         ...(duration && { duration }),
-         ...(category && { category }),
-         ...(description && { description }),
-         ...(isFeatured !== undefined && { isFeatured: Boolean(isFeatured) }),
-         updatedAt: new Date(),
-       };
-       const result = await coursesCollection.updateOne(
-         {
-           _id: new ObjectId(req.params.id),
-         },
-         {
-           $set: updatedCourse,
-         }
-       );
-       res.json(result);
-     });
+    //   update a course
 
-     //   delete a course by id api
-     app.delete("/courses/:id", async (req, res) => {
-       const query = { _id: new ObjectId(req.params.id) };
-       const result = await coursesCollection.deleteOne(query);
-       res.json(result);
-     });
+    app.put("/courses/:id", async (req, res) => {
+      const {
+        title,
+        imageUrl,
+        price,
+        duration,
+        category,
+        description,
+        isFeatured,
+      } = req.body;
 
-     //   -------------------------------enrollment apis---------
+      const updatedCourse = {
+        ...(title && { title }),
+        ...(imageUrl && { imageUrl }),
+        ...(price !== undefined && { price: Number(price) }),
+        ...(duration && { duration }),
+        ...(category && { category }),
+        ...(description && { description }),
+        ...(isFeatured !== undefined && { isFeatured: Boolean(isFeatured) }),
+        updatedAt: new Date(),
+      };
+      const result = await coursesCollection.updateOne(
+        {
+          _id: new ObjectId(req.params.id),
+        },
+        {
+          $set: updatedCourse,
+        }
+      );
+      res.json(result);
+    });
 
-     //   user enrolls in a course(post enroll)
-     app.post("/courses/:id/enroll", async (req, res) => {
-       const courseId = req.params.id;
-       const { userId } = req.body;
-       // add course to user
-       try {
-         await usersCollection.updateOne(
-           { _id: userId },
-           { $addToSet: { enrolledCourses: courseId } }
-         );
-         //  add user to course
-         await coursesCollection.updateOne(
-           { _id: new ObjectId(courseId) },
-           { $addToSet: { enrolledStudents: userId } }
-         );
-         res.json({ message: "enrollment successful" });
-       } catch (error) {
-         console.log(error);
-         res.status(500).json({ message: "Enrollment failed" });
-       }
-     });
+    //   delete a course by id api
+    app.delete("/courses/:id", async (req, res) => {
+      const query = { _id: new ObjectId(req.params.id) };
+      const result = await coursesCollection.deleteOne(query);
+      res.json(result);
+    });
 
-     //   get enrolled courses for a user
-     app.get("/users/:id/enrolled", async (req, res) => {
-       const userId = req.params.id;
+    //   -------------------------------enrollment apis---------
 
-       try {
-         const user = await usersCollection.findOne({ _id: userId });
-         if (!user) return res.status(404).json({ message: "user not found" });
-         const enrolledCourseIds = user.enrolledCourses || [];
-         if (enrolledCourseIds.length === 0) {
-           return res.json([]);
-         }
+    //   user enrolls in a course(post enroll)
+    app.post("/courses/:id/enroll", async (req, res) => {
+      const courseId = req.params.id;
+      const { userId } = req.body;
+      // add course to user
+      try {
+        await usersCollection.updateOne(
+          { _id: userId },
+          { $addToSet: { enrolledCourses: courseId } }
+        );
+        //  add user to course
+        await coursesCollection.updateOne(
+          { _id: new ObjectId(courseId) },
+          { $addToSet: { enrolledStudents: userId } }
+        );
+        res.json({ message: "enrollment successful" });
+      } catch (error) {
+        console.log(error);
+        res.status(500).json({ message: "Enrollment failed" });
+      }
+    });
 
-         //  fetch all courses enrolled by an user
-         const courses = await coursesCollection
-           .find({
-             _id: { $in: enrolledCourseIds.map((id) => new ObjectId(id)) },
-           })
-           .toArray();
-         res.json(courses);
-       } catch (error) {
-         console.log(error);
-         res.status(500).json({ message: "failed to fetch enrolled courses" });
-       }
-     });
+    //   get enrolled courses for a user
+    app.get("/users/:id/enrolled", async (req, res) => {
+      const userId = req.params.id;
 
-     //  get all students enrolled in a course
-     app.get("/courses/:id/students", async (req, res) => {
-       const courseId = req.params.id;
+      try {
+        const user = await usersCollection.findOne({ _id: userId });
+        if (!user) return res.status(404).json({ message: "user not found" });
+        const enrolledCourseIds = user.enrolledCourses || [];
+        if (enrolledCourseIds.length === 0) {
+          return res.json([]);
+        }
 
-       try {
-         const course = await coursesCollection.findOne({
-           _id: new ObjectId(courseId),
-         });
-         if (!course)
-           return res.status(404).json({ message: "course not found" });
-         const enrolledUserIds = course.enrolledStudents || [];
-         if (enrolledUserIds.length === 0) {
-           return res.json([]);
-         }
+        //  fetch all courses enrolled by an user
+        const courses = await coursesCollection
+          .find({
+            _id: { $in: enrolledCourseIds.map((id) => new ObjectId(id)) },
+          })
+          .toArray();
+        res.json(courses);
+      } catch (error) {
+        console.log(error);
+        res.status(500).json({ message: "failed to fetch enrolled courses" });
+      }
+    });
 
-         //  fetch all students enrolled in a course
+    //  get all students enrolled in a course
+    app.get("/courses/:id/students", async (req, res) => {
+      const courseId = req.params.id;
 
-         const users = await usersCollection
-           .find({
-             _id: { $in: enrolledUserIds },
-           })
-           .toArray();
-         res.json(users);
-       } catch (error) {
-         console.log(error);
-         res.status(500).json({ message: "failed to fetch enrolled users" });
-       }
-     });
+      try {
+        const course = await coursesCollection.findOne({
+          _id: new ObjectId(courseId),
+        });
+        if (!course)
+          return res.status(404).json({ message: "course not found" });
+        const enrolledUserIds = course.enrolledStudents || [];
+        if (enrolledUserIds.length === 0) {
+          return res.json([]);
+        }
 
-     app.listen(port, () => {
-       console.log(`Smart server is running on port: ${port}`);
-     });
+        //  fetch all students enrolled in a course
 
-     //  await client.db("admin").command({ ping: 1 });
-     console.log("✅ MongoDB connection successful");
-     // Send a ping to confirm a successful connection
-   } finally {
-     // Ensures that the client will close when you finish/error
-   }
+        const users = await usersCollection
+          .find({
+            _id: { $in: enrolledUserIds },
+          })
+          .toArray();
+        res.json(users);
+      } catch (error) {
+        console.log(error);
+        res.status(500).json({ message: "failed to fetch enrolled users" });
+      }
+    });
+
+    app.listen(port, () => {
+      console.log(`Smart server is running on port: ${port}`);
+    });
+
+    //  await client.db("admin").command({ ping: 1 });
+    console.log("✅ MongoDB connection successful");
+    // Send a ping to confirm a successful connection
+  } finally {
+    // Ensures that the client will close when you finish/error
+  }
 }
     
 
