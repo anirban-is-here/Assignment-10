@@ -289,30 +289,30 @@ async function run() {
       }
     });
 
-    //   get enrolled courses for a user
+    
+
     app.get("/users/:id/enrolled", async (req, res) => {
-      const { _id } = req.params.id;
-
+      const id = req.params.id; // get the id string
       try {
-        const user = await usersCollection.findOne({ _id: _id });
+        const user = await usersCollection.findOne({ _id: new ObjectId(id) });
         if (!user) return res.status(404).json({ message: "user not found" });
-        const enrolledCourseIds = user.enrolledCourses || [];
-        if (enrolledCourseIds.length === 0) {
-          return res.json([]);
-        }
 
-        //  fetch all courses enrolled by an user
+        const enrolledCourseIds = user.enrolledCourses || [];
+        if (enrolledCourseIds.length === 0) return res.json([]);
+
         const courses = await coursesCollection
           .find({
             _id: { $in: enrolledCourseIds.map((id) => new ObjectId(id)) },
           })
           .toArray();
+
         res.json(courses);
       } catch (error) {
         console.log(error);
         res.status(500).json({ message: "failed to fetch enrolled courses" });
       }
     });
+
 
     //  get all students enrolled in a course
     app.get("/courses/:id/students", async (req, res) => {
