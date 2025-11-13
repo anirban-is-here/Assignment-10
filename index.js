@@ -125,11 +125,40 @@ async function run() {
     });
 
     //   get course by id api
-    app.get("/courses/:id", async (req, res) => {
-      const id = req.params.id;
-      const query = { _id: new ObjectId(id) };
-      const result = await coursesCollection.findOne(query);
-      res.json(result);
+    app.get("/courses/:_id", async (req, res) => {
+      try {
+        const id = req.params._id;
+        const course = await coursesCollection.findOne({
+          _id: new ObjectId(id),
+        });
+
+        if (!course)
+          return res.status(404).json({ message: "Course not found" });
+
+        // Fetch instructor info
+        const instructor = await usersCollection.findOne({
+          _id: course.instructorId,
+        });
+
+        // Fetch enrolled students info
+        const enrolledStudentIds = course.enrolledStudents || [];
+        const students =
+          enrolledStudentIds.length > 0
+            ? await usersCollection
+                .find({ _id: { $in: enrolledStudentIds } })
+                .project({ name: 1, email: 1, _id: 1 })
+                .toArray()
+            : [];
+
+        res.json({
+          ...course,
+          instructor,
+          students,
+        });
+      } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Failed to fetch course" });
+      }
     });
 
     //   add a course
@@ -158,7 +187,7 @@ async function run() {
         enrolledStudents: [],
       };
       const result = await coursesCollection.insertOne(newCourse);
-      res.json(result);
+      res.json({ message: "Course Added", result });
     });
 
     //   update a course
@@ -205,33 +234,67 @@ async function run() {
     //   -------------------------------enrollment apis---------
 
     //   user enrolls in a course(post enroll)
+    // POST /courses/:id/enroll
     app.post("/courses/:id/enroll", async (req, res) => {
       const courseId = req.params.id;
       const { userId } = req.body;
-      // add course to user
+
       try {
         await usersCollection.updateOne(
           { _id: userId },
           { $addToSet: { enrolledCourses: courseId } }
         );
-        //  add user to course
+
         await coursesCollection.updateOne(
           { _id: new ObjectId(courseId) },
           { $addToSet: { enrolledStudents: userId } }
         );
-        res.json({ message: "enrollment successful" });
+
+        // Get updated course
+        const updatedCourse = await coursesCollection.findOne({
+          _id: new ObjectId(courseId),
+        });
+
+        // Get instructor & students
+        let instructor;
+        try {
+          // If stored as ObjectId
+          instructor = await usersCollection.findOne({
+            _id: new ObjectId(updatedCourse.instructorId),
+          });
+        } catch {
+          // If stored as Firebase UID (string)
+          instructor = await usersCollection.findOne({
+            uid: updatedCourse.instructorId,
+          });
+        }
+
+        const students =
+          updatedCourse.enrolledStudents?.length > 0
+            ? await usersCollection
+                .find({
+                  _id: { $in: updatedCourse.enrolledStudents },
+                })
+                .project({ name: 1, email: 1 })
+                .toArray()
+            : [];
+
+        res.json({
+          message: "Enrollment successful",
+          course: { ...updatedCourse, ...instructor, students },
+        });
       } catch (error) {
-        console.log(error);
+        console.error(error);
         res.status(500).json({ message: "Enrollment failed" });
       }
     });
 
     //   get enrolled courses for a user
     app.get("/users/:id/enrolled", async (req, res) => {
-      const userId = req.params.id;
+      const { _id } = req.params.id;
 
       try {
-        const user = await usersCollection.findOne({ _id: userId });
+        const user = await usersCollection.findOne({ _id: _id });
         if (!user) return res.status(404).json({ message: "user not found" });
         const enrolledCourseIds = user.enrolledCourses || [];
         if (enrolledCourseIds.length === 0) {
